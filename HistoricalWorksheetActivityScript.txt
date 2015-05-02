@@ -1,0 +1,223 @@
+Dim SheetType As String, TheWorkbook As String, TheWorkbookRange As Long
+Dim TheMovementRangeConstant As Long, ColumnIndex As Integer, VerticalCounter As Long, LookUpCompare As Long, VerticalCounter2 As Long
+
+Sub MasterSub()
+	'TheWorkbook = Replace(ActiveWorkbook.Name, ".xlsm", "")
+	TheWorkbook = ActiveWorkbook.Name
+	SheetType = "Worksheets"
+	Workbooks.Open "S:\Editorial-new\Mack Levine\SEO\Historical\MovementOverTime" & SheetType & ".xlsx"
+	Call FixURLs
+	Call FindKeywords
+	Call AddKeywords
+	SheetType = "Games"
+	Workbooks.Open "S:\Editorial-new\Mack Levine\SEO\Historical\MovementOverTime" & SheetType & ".xlsx"
+	Call FixURLs
+	Call FindKeywords
+	Call AddKeywords
+	Workbooks(TheWorkbook).Close savechanges:=False
+End Sub 
+
+Sub FixURLs()
+	
+	Workbooks(TheWorkbook).Activate
+	Dim counter As Long, cellValue() As String
+	counter = 34
+	
+	With ActiveSheet
+		Do While .Cells(counter, 1).Value <> 0
+			cellValue = Split(.Cells(counter, 1).Value, "(")
+			.Cells(counter, 1).Value = cellValue(0)
+			counter = counter + 1
+		Loop
+	End With
+	
+	counter = 34
+	
+	Dim PosArray() As Integer, PrevArray() As Integer, counter2 As Integer
+	
+	With ActiveSheet
+		Do While .Cells(counter, 1).Value <> 0
+			counter2 = 1
+			'before initializing the arrays, check to see if there's a duplicate keyword value
+			If .Cells(counter, 1).Value = .Cells(counter + counter2, 1).Value And .Cells(counter + counter2, 1).Value <> 0 Then
+				ReDim PosArray(0) As Integer
+				ReDim PrevArray(0) As Integer
+				'initialize values for both of these 0-position arrays
+				PosArray(0) = .Cells(counter, 2).Value
+				PrevArray(0) = .Cells(counter, 3).Value
+				While .Cells(counter, 1).Value = .Cells(counter + counter2, 1).Value
+					ReDim Preserve PosArray(0 To counter2) As Integer
+					PosArray(counter2) = .Cells(counter + counter2, 2).Value
+					ReDim Preserve PrevArray(0 To counter2) As Integer
+					PrevArray(counter2) = .Cells(counter + counter2, 3).Value
+					counter2 = counter2 + 1
+				Wend
+				
+				For i = 0 To Ubound(PosArray)
+					If PosArray(i) = 0 Then
+						PosArray(i) = 21
+					Else
+					End If
+				Next i
+				
+				For j = 0 To Ubound(PrevArray)
+					If PrevArray(j) = 0 Then
+						PrevArray(j) = 21
+					Else
+					End If
+				Next j
+				
+				If WorksheetFunction.Min(PosArray) = 21 Then
+					.Cells(counter, 2).Value = 0
+					.Cells(counter, 3).Interior.ColorIndex = 4
+				Else
+					.Cells(counter, 2).Value = WorksheetFunction.Min(PosArray)
+					.Cells(counter, 3).Interior.ColorIndex = 4
+				End If
+				
+				If WorksheetFunction.Min(PrevArray) = 21 Then
+					.Cells(counter, 3).Value = 0
+					.Cells(counter, 3).Interior.ColorIndex = 4
+				Else
+					.Cells(counter, 3).Value = WorksheetFunction.Min(PrevArray)
+					.Cells(counter, 3).Interior.ColorIndex = 4
+				End If
+				
+				.Range(Cells(counter + 1, 1), Cells(counter + (Ubound(PrevArray)), 3)).Interior.ColorIndex = 3
+				
+				Dim URLIndex As Integer
+				URLIndex = counter + Application.Match(WorksheetFunction.Min(PosArray), PosArray, False)
+				URLIndex = URLIndex - 1 'corrects for the application.match function returning an index that isn't zero-based (it's off by one)
+				
+				.Cells(counter, 5).Value = .Cells(URLIndex, 5).Value 'updates the landing page URL so that it reflects the highest-ranking page for the term.
+			
+				.Range(Cells(counter + 1, 1), Cells(counter + Ubound(PrevArray), 1)).EntireRow.Delete 'deletes the rolled-up cells.
+				
+			Else
+			End If
+			counter = counter + 1
+		Loop
+	End With
+	
+	TheWorkbookRange = 34
+	
+	With ActiveSheet
+		Do Until .Cells(TheWorkbookRange + 1, 1) = 0
+			TheWorkbookRange = TheWorkbookRange + 1
+		Loop
+	End With
+	
+End Sub
+
+Sub FindKeywords()
+	Workbooks("MovementOverTime" & SheetType & ".xlsx").Activate
+	ColumnIndex = 3
+	VerticalCounter = 2 'can vertical counter be repurposed to act as a constant in place of TheMovementRange?
+	
+	With ActiveSheet 'identifies the position of the appropriate date column
+		Dim columnName As String
+		columnName = Replace(Replace(TheWorkbook, "-", "/"), ".xlsm", "")
+		Do Until CStr(.Cells(1, ColumnIndex).Value) = columnName
+			ColumnIndex = ColumnIndex + 1
+		Loop
+	End With
+	
+	Dim CellKeyword As String, CellKeywordLookupValue As Variant
+	
+	With ActiveSheet
+		LookUpCompare = 1 'initialize the value that indicates where to compare data
+		'check to see if there are dates in the cell that immediately precedes the date column
+		If Len(.Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value) = 0 Then
+			Do Until Len(.Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value) > 0
+				LookUpCompare = LookUpCompare + 1 'back up by one column and check again.
+			Loop
+			'declare a new variable; make it equal to vertical counter
+			'color all of the cells with missing data gray
+			VerticalCounter2 = 2
+			Do Until Len(.Cells(VerticalCounter2, ColumnIndex - LookUpCompare).Value) = 0
+				'put an i-loop in here that uses LookUpCompare as the limit
+				For i = 1 To (LookUpCompare - 1)
+					.Cells(VerticalCounter2, ColumnIndex - i).Interior.ColorIndex = 15 'color the empty cell gray
+					
+				Next i
+				VerticalCounter2 = VerticalCounter2 + 1
+			Loop
+		Else
+		End If
+		Do Until .Cells(VerticalCounter, 1).Value = 0 'go until the counter finds no more pre-existing keywords in the sheet
+			CellKeyword = .Cells(VerticalCounter, 1).Value
+			If IsError(Application.VLookup(CellKeyword, Workbooks(TheWorkbook).Worksheets(1).Range("A34:E" & CStr(TheWorkbookRange)), 2, 0)) Then
+				.Cells(VerticalCounter, ColumnIndex).Value = .Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value 'the position stays the same.
+				'CHECK TO MAKE SURE THIS ISN'T OVERWRITING VALID LOOKUP VALUES!
+			Else
+				CellKeywordLookupValue = Application.VLookup(CellKeyword, Workbooks(TheWorkbook).Worksheets(1).Range("A34:E" & CStr(TheWorkbookRange)), 2, 0)
+				.Cells(VerticalCounter, ColumnIndex).Value = CellKeywordLookupValue 'adds the latest rank to the appropriate date cell
+				If .Cells(VerticalCounter, ColumnIndex).Value > .Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value And .Cells(VerticalCounter, ColumnIndex - 1).Value = 0 Then
+					.Cells(VerticalCounter, ColumnIndex).Font.ColorIndex = 10'the keyword improved
+				ElseIf .Cells(VerticalCounter, ColumnIndex).Value < .Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value And .Cells(VerticalCounter, ColumnIndex).Value = 0 Then
+					.Cells(VerticalCounter, ColumnIndex).Font.ColorIndex = 9 'the keyword dropped
+				ElseIf .Cells(VerticalCounter, ColumnIndex).Value < .Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value Then
+					.Cells(VerticalCounter, ColumnIndex).Font.ColorIndex = 10 'the keyword improved
+				ElseIf	.Cells(VerticalCounter, ColumnIndex).Value > .Cells(VerticalCounter, ColumnIndex - LookUpCompare).Value Then
+					.Cells(VerticalCounter, ColumnIndex).Font.ColorIndex = 9 'the keyword dropped
+				Else
+				End If
+				'next if statement: check the value for the URL
+				If .Cells(VerticalCounter, 3).Value = Application.VLookup(CellKeyword, Workbooks(TheWorkbook).Worksheets(1).Range("A34:E" & CStr(TheWorkbookRange)), 5, 0) Then 'if the landing page URL is the same, do nothing
+				Else 'in the event that the landing page URL for the keyword changed...
+					.Range(Cells(VerticalCounter, ColumnIndex), Cells(VerticalCounter, ColumnIndex)).AddComment("Older landing page was: " & .Cells(VerticalCounter, 3).Value) 'make a note in the cell regarding the landing page
+					.Cells(VerticalCounter, 3).Value = Application.VLookup(CellKeyword, Workbooks(TheWorkbook).Worksheets(1).Range("A34:E" & CStr(TheWorkbookRange)), 5, 0) 'update the URL
+					.Cells(VerticalCounter, ColumnIndex).Interior.ColorIndex = 38 'color the cell to indicate a landing page change and possible cannibalization
+				End If
+			End If
+			VerticalCounter = VerticalCounter + 1
+		Loop
+	End With
+End Sub
+
+Sub AddKeywords()
+	VerticalCounter = VerticalCounter - 1 'fixes the value of VerticalCounter
+	
+	Workbooks(TheWorkbook).Activate
+	Dim ContentType As String, VolumeCap As Long 'otherwise, high-volume keywords will cause it to overflow
+	
+	TheMovementRangeConstant = VerticalCounter 'initialize MovementRangeConstant here; won't perform redundant lookups
+	
+	For i = 34 To TheWorkbookRange
+		With ActiveSheet
+			VolumeCap = .Cells(i, 4).Value
+			ContentType = .Cells(i, 6).Value
+			Select Case SheetType
+				Case "Worksheets"
+					If ContentType = "Worksheets" And VolumeCap >= 1000 Then
+						Call CheckAndAdd(i)
+					Else
+					End If
+				Case "Games"
+					If ContentType = "Games" And VolumeCap >= 300 Then
+						Call CheckAndAdd(i)
+					Else
+					End If
+			End Select
+		End With
+	Next i
+	Workbooks("MovementOverTime" & SheetType & ".xlsx").Save
+	'make sure this works
+End Sub
+
+Sub CheckAndAdd(j)
+	Dim CellKeyword As String, CellKeywordLookupValue As Variant
+	CellKeyword = ActiveSheet.Cells(j, 1)
+	CellKeywordLookupValue = Application.VLookup(CellKeyword, Workbooks("MovementOverTime" & SheetType & ".xlsx").Worksheets(1).Range("A2:B" & CStr(TheMovementRangeConstant)), 2, 0)
+	If IsError(CellKeywordLookupValue) Then
+		Workbooks("MovementOverTime" & SheetType & ".xlsx").Worksheets(1).Cells(VerticalCounter + 1, 1).Value = CellKeyword 'add the keyword
+		Workbooks("MovementOverTime" & SheetType & ".xlsx").Worksheets(1).Cells(VerticalCounter + 1, 2).Value = ActiveSheet.Cells(j, 4).Value 'add the volume
+		Workbooks("MovementOverTime" & SheetType & ".xlsx").Worksheets(1).Cells(VerticalCounter + 1, 3).Value = ActiveSheet.Cells(j, 5).Value 'add the initial URL
+		Workbooks("MovementOverTime" & SheetType & ".xlsx").Worksheets(1).Cells(VerticalCounter + 1, ColumnIndex).Value = ActiveSheet.Cells(j, 2).Value 'also update the URL using the variable
+		VerticalCounter = VerticalCounter + 1
+	Else ' do nothing
+	End If
+End Sub
+
+
+

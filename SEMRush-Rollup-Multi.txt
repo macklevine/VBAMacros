@@ -1,0 +1,561 @@
+Dim StartingDate As String, DateArray(0 To 6) As Date, StringDateArray(0 To 6) As String, MasterRange As Long, MasterRange2 As Long, MasterRange3 As Long
+Dim NumberOfComponentDates As Integer
+
+'BUG: entries in "All Keywords" don't get properly tabled
+
+Sub MasterSub()
+    Call CheckPresence
+	Call GetDates
+    Call OpenSheets
+	Call DeleteSchoolFinder
+	Call DefineMasterRange
+	Call AllLookUps
+	Call RecalculateTable
+	Call HighlightTopSpots
+	Call FixColors("All Keywords", MasterRange3, 2)
+	Call MoveCannibalizationKeywords
+	Call FixColors("Possible Cannibalization", MasterRange - 32, 2)
+	Call FormatEpochTime("Possible Cannibalization", MasterRange - 32, 2)
+	Call RemoveURLAddenda("Possible Cannibalization", MasterRange - 32, 2)
+	Call CloseSheets()
+End Sub
+
+Sub CheckPresence() 'creates an array of dates used to refer to component worksheets
+    StartingDate = CDate(Left(ActiveWorkbook.Name, (InStr(1, ActiveWorkbook.Name, ".") - 1)))
+    DateArray(0) = StartingDate
+    For i = 1 To 6
+        DateArray(i) = DateAdd("d", i, StartingDate)
+    Next i
+    For i = 0 To 6
+        StringDateArray(i) = Replace(CStr(DateArray(i)), "/", "-") & ".xlsm"
+    Next i
+End Sub
+
+Sub GetDates() 'defines an important constant that determines how many workbooks are opened and how many lookups are performed
+	NumberOfComponentDates = InputBox("How many dates will this report roll up (total)? DON'T PUT MORE THAN SEVEN, BLYTHE. I'M WATCHING YOU.")
+End Sub
+
+Sub OpenSheets() 'uses StringDateArray top open all of the component sheets to be looked up
+    For i = 1 To (NumberOfComponentDates - 1)
+    Workbooks.Open "S:\Editorial-new\Mack Levine\SEO\Exec Weekly Report\" & Replace(StringDateArray(i), ".xlsm", "") & "\" & StringDateArray(i)
+    Next i
+End Sub
+
+Sub DeleteSchoolFinder() 'deletes schoolfinder in chunks from all component sheets by alphabetizing each sheet and defining a range
+	For i = 0 To (NumberOfComponentDates - 1) 
+	Workbooks(StringDateArray(i)).Activate
+	Set filterTable = ActiveWorkbook.Worksheets("gained").ListObjects("Main Table")
+	With filterTable
+		.Sort.SortFields.Clear
+		.Sort.SortFields.Add Key:=Range("F36"), SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
+		With .Sort
+			.Header = xlYes
+			.MatchCase = False
+			.Orientation = xlTopToBottom
+			.SortMethod = xlPinYin
+			.Apply
+		End With
+	End With
+	Dim FuckSchoolFinder1 As Integer, FuckSchoolFinder2 As Integer
+	FuckSchoolFinder1 = 34
+	Do Until ActiveSheet.Cells(FuckSchoolFinder1, 6).Value = "School Finder"
+		FuckSchoolFinder1 = FuckSchoolFinder1 + 1
+	Loop
+	ActiveSheet.Cells(FuckSchoolFinder1, 6).Select
+	FuckSchoolFinder2 = FuckSchoolFinder1
+	Do Until ActiveSheet.Cells(FuckSchoolFinder2, 6).Value <> "School Finder"
+		FuckSchoolFinder2 = FuckSchoolFinder2 + 1
+	Loop
+	FuckSchoolFinder2 = FuckSchoolFinder2 - 1
+	ActiveSheet.Cells(FuckSchoolFinder2, 6).Select
+	ActiveSheet.Range("A" & Cstr(FuckSchoolFinder1) & ":B" & Cstr(FuckSchoolFinder2)).Select
+	Selection.EntireRow.Delete
+	Next i
+End Sub
+
+Sub DefineMasterRange
+	MasterRange = 0 'initializes the variable; its value will grow each time LookUps is called
+    Workbooks(StringDateArray(0)).Activate
+    Do Until IsEmpty(ActiveSheet.Cells(MasterRange + 1, 1))
+        MasterRange = MasterRange + 1
+    Loop 'may not be the most efficient range to define MasterRange, since it has to start counting from zero each time the value is updated...
+	ActiveSheet.Cells(MasterRange, 1).Select
+	'MsgBox("This is the first calculation of the Master Range. Happy with it?")
+End Sub
+
+Sub AllLookUps() 'calls lookups against each component sheet
+	
+	For i = 1 To (NumberOfComponentDates - 1)
+		Call LookUps(StringDateArray(i))
+	Next i
+	
+End Sub
+
+Sub LookUps(StringDate) 
+
+	Workbooks(StringDate).Activate
+	MasterRange2 = 0
+	Do Until IsEmpty(ActiveSheet.Cells(MasterRange2 + 1, 1))
+		MasterRange2 = MasterRange2 + 1
+	Loop
+	ActiveSheet.Cells(MasterRange2, 1).Select
+	
+	Workbooks(StringDateArray(0)).Activate
+	
+	ActiveSheet.Cells(MasterRange, 1).Select
+	'MsgBox("This is the new Master Range. Did it calculate correctly?")
+    
+    Dim CellKeyword As String, CellKeywordLookupValue As Variant
+    For i = 34 To MasterRange
+		CellKeyword = ActiveSheet.Cells(i, 1).Value
+		CellKeywordLookupValue = Application.VLookup(CellKeyword, Workbooks(StringDate).Worksheets(1).Range("A34:B" & Cstr(MasterRange2)), 2, 0)
+		If IsError(CellKeywordLookupValue) Then 'Do nothing
+		ElseIf Application.VLookup(CellKeyword, Workbooks(StringDate).Worksheets(1).Range("A34:B" & Cstr(MasterRange2)), 2, 0) >= 0 Then
+            ActiveSheet.Cells(i, 2).Value = Application.WorksheetFunction.VLookup(CellKeyword, Workbooks(StringDate).Worksheets(1).Range("A34:G" & Cstr(MasterRange2)), 2, 0) 'Updates most recent position
+			ActiveSheet.Cells(i, 4).Value = Application.WorksheetFunction.VLookup(CellKeyword, Workbooks(StringDate).Worksheets(1).Range("A34:G" & Cstr(MasterRange2)), 4, 0) 'Revises the volume
+			ActiveSheet.Cells(i, 8).Value = Application.WorksheetFunction.Vlookup(CellKeyword, Workbooks(StringDate).Worksheets(1).Range("A34:H" & Cstr(MasterRange2)), 8, 0) 'Revises the time stamp
+			Call FixMovementType(i)
+        Else
+        End If
+    Next i
+	
+	Workbooks(StringDate).Activate 'Activate the component sheet to start looking up its keywords against keywords in the top level sheet
+	
+	Dim MasterRangeConstant As Long
+	
+	MasterRangeConstant = MasterRange 'prevents the sheet from performing redundant lookups as the range of keywords on the first sheet grows
+	For i = 34 To MasterRange2
+		CellKeyword = ActiveSheet.Cells(i, 1).Value
+		CellKeywordLookupValue = Application.VLookup(CellKeyword, Workbooks(StringDateArray(0)).Worksheets(1).Range("A34:B" & Cstr(MasterRangeConstant)), 2, 0)
+		If IsError(CellKeywordLookupValue) Then
+			For j = 1 To 8
+				Workbooks(StringDateArray(0)).Worksheets(1).Cells(MasterRange + 1, j).Value = Workbooks(StringDate).Worksheets(1).Cells(i, j).Value
+			Next j
+			MasterRange = MasterRange + 1
+		Else 'Do nothing
+		End If
+	Next i
+End Sub
+
+Sub FixMovementType(CellIndex) 'gets called on a specific cell to fix its movement. Helpful when starting and ending positions are revised.
+	Dim intPosition As Integer, intPreviousPosition As Integer
+	intPosition = ActiveSheet.Cells(CellIndex, 2).Value
+	intPreviousPosition = ActiveSheet.Cells(CellIndex, 3).Value
+	If intPosition = 0 And intPreviousPosition = 0 Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Gained, then Lost"
+	ElseIf intPosition > 0 And intPreviousPosition = 0 Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Gained"
+	ElseIf intPosition = 0 And intPreviousPosition > 0 Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Lost"
+	ElseIf intPosition > intPreviousPosition Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Dropped"
+	ElseIf intPosition < intPreviousPosition Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Improved"
+	ElseIf intPosition = intPreviousPosition Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "No Change"
+	Else
+	End If
+End Sub
+
+Sub RecalculateTable() 'adds more granularity than the component sheets included and recalculates all values for the summary table.
+	
+	Workbooks(StringDateArray(0)).Activate
+	
+	For i = 0 To 25 Step 8
+		ActiveSheet.Cells(1 + i, 6).Value = "250-490"
+		ActiveSheet.Cells(1 + i, 7).Value = "30-240"
+		ActiveSheet.Cells(1 + i, 8).Value = "<=20"
+		ActiveSheet.Cells(1 + i, 9).Value = "Total Excluding Longtail"
+	Next i
+	
+	ActiveSheet.Range(Cells(2, 2), Cells(8, 8)).Value = 0
+	ActiveSheet.Range(Cells(10, 2), Cells(16, 8)).Value = 0
+	ActiveSheet.Range(Cells(18, 2), Cells(24, 8)).Value = 0
+	ActiveSheet.Range(Cells(26, 2), Cells(32, 8)).Value = 0
+	
+	Set alphabetizeTable = ActiveWorkbook.Worksheets("gained").ListObjects("Main Table")
+	With alphabetizeTable
+		.Sort.SortFields.Clear
+		.Sort.SortFields.Add Key:=Range("A33"), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+		With .Sort
+		    .Header = xlYes
+            .MatchCase = False
+            .Orientation = xlTopToBottom
+            .SortMethod = xlPinYin
+            .Apply
+		End With
+	End With
+	
+	ActiveWorkbook.Worksheets.Add After:=Workbooks(StringDateArray(0)).Worksheets("gained")
+	ActiveSheet.Name = "All Keywords"
+	
+	Workbooks(StringDateArray(0)).Worksheets("gained").Activate
+	ActiveSheet.Range("A33:H" & Cstr(MasterRange)).Select
+	ActiveSheet.Range("A33:H" & Cstr(MasterRange)).Copy
+	Workbooks(StringDateArray(0)).Worksheets("All Keywords").Activate
+	ActiveSheet.Cells(1, 1).Select
+	ActiveSheet.Paste
+	
+	MasterRange3 = MasterRange - 32
+	Call RemoveURLAddenda("All Keywords", MasterRange3, 2)
+	Call FormatEpochTime("All Keywords", MasterRange3, 2)
+	
+	Dim StartingPositionArray() As Integer
+	Dim EndingPositionArray() As Integer
+	Dim cellCounter As Integer
+	Dim DeleteRange As String
+
+	ActiveSheet.Columns("A").AutoFit
+	
+	For i = 1 To MasterRange3
+		With ActiveSheet
+			cellCounter = 1
+			If .Cells(i, 1).Value = .Cells((i + cellCounter), 1).Value And .Cells((i + cellCounter), 1).Value <> 0 Then 'second condition prevents overflow upon reaching empty cells
+				ReDim StartingPositionArray(0) As Integer
+				ReDim EndingPositionArray(0) As Integer
+				StartingPositionArray(0) = .Cells(i, 3).Value
+				EndingPositionArray(0) = .Cells(i, 2).Value
+				Do While .Cells(i, 1).Value = .Cells((i + cellCounter), 1).Value
+					ReDim Preserve StartingPositionArray(0 to cellCounter) As Integer
+					StartingPositionArray(cellCounter) = .Cells((i + cellCounter), 3).Value
+					ReDim Preserve EndingPositionArray(0 to cellCounter) As Integer
+					EndingPositionArray(cellCounter) = .Cells((i + cellCounter), 2).Value
+					cellCounter = cellCounter + 1
+				Loop
+				
+				For j = 0 To Ubound(StartingPositionArray)
+					If StartingPositionArray(j) = 0 Then
+						StartingPositionArray(j) = 21
+					Else
+					End If
+				Next j
+				
+				For k = 0 To Ubound(EndingPositionArray)
+					If EndingPositionArray(k) = 0 Then
+						EndingPositionArray(k) = 21
+					Else
+					End If
+				Next k
+				
+				If WorksheetFunction.Min(StartingPositionArray) = 21 Then
+					.Cells(i, 3).Value = 0
+				Else
+					.Cells(i, 3).Value = WorksheetFunction.Min(StartingPositionArray)
+				End If
+				
+				If WorksheetFunction.Min(EndingPositionArray) = 21 Then
+					.Cells(i, 2).Value = 0
+				Else
+					.Cells(i, 2).Value = WorksheetFunction.Min(EndingPositionArray)
+				End If
+				
+				Dim URLIndex As Long
+				URLIndex = i + Application.Match(WorksheetFunction.Min(EndingPositionArray), EndingPositionArray, False)
+				URLIndex = URLIndex - 1 'corrects for a non zero-based index in the array; will evaluate to zero in the event that the original URL is preserved
+				
+				.Cells(URLIndex, 5).Select
+				.Cells(i, 5).Value = .Cells(URLIndex, 5).Value 'update the URL
+				
+				'ADD A MECHANISM THAT UPDATES THE URL CORRECTLY. Use the index of the lowest value in the Ending Position Array added to i.
+				'Use select and MsgBox debugging to make sure that the right URL is being selected.
+				
+				DeleteRange = "A" & Cstr(i + 1) & ":A" & Cstr(i + Ubound(StartingPositionArray))
+				.Range(DeleteRange).EntireRow.Delete
+				MasterRange3 = MasterRange3 - Ubound(StartingPositionArray) 'make sure this math
+				'correctly recalculates MasterRange3. You could be off by one. Regardless, this won't really work because the upper limit of the loop can't change...
+				'this whole block of code could be made cleaner by just having a do-while loop and replacing i with a variable called 'counter' or something
+				Call FixMovementType(i)
+			Else
+			End If
+		End With
+	Next i
+	
+	For i = 2 To MasterRange3
+		Call RecalculateTableValues(1, 2, i, 0)
+	Next i
+	
+	With ActiveSheet 'a loop that subtracts the low-volume keywords to create an adjusted total
+		For j = 0 To 25 Step 8
+			For k = 0 To 6 
+				.Cells(2 + j + k, 9).Value = .Cells(2 + j + k, 2).Value - .Cells(2 + j + k, 8).Value
+			Next k
+		Next j
+	End With
+	
+End Sub
+
+Sub FixColors(theWorksheet, theRange, theStart)
+	Workbooks(StringDateArray(0)).Worksheets(theWorksheet).Activate
+    For i = theStart To theRange
+            If ActiveSheet.Cells(i, 2).Value = 0 Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(175, 90, 90)
+            ElseIf ActiveSheet.Cells(i, 3).Value = 0 Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(90, 190, 90)
+            ElseIf ActiveSheet.Cells(i, 2).Value < ActiveSheet.Cells(i, 3).Value Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(90, 190, 90)
+            ElseIf ActiveSheet.Cells(i, 2).Value > ActiveSheet.Cells(i, 3).Value Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(175, 90, 90)
+            ElseIf ActiveSheet.Cells(i, 2).Value = ActiveSheet.Cells(i, 3).Value Then
+				ActiveSheet.Cells(i, 2).Font.Color = RGB(255, 204, 0)
+			Else
+            End If
+    Next i
+		
+        ActiveSheet.Range("B34:B" & Cstr(theRange)).Font.Bold = True
+        ActiveSheet.Range("B34:B" & Cstr(theRange)).Font.Size = 12
+		
+	For i = theStart To theRange
+		If (ActiveSheet.Cells(i, 4).Value > 0 And ActiveSheet.Cells(i, 4).Value <= 490) Then                   
+            ActiveSheet.Cells(i, 4).Interior.Color = RGB(255, 191, 248)
+        ElseIf (ActiveSheet.Cells(i, 4).Value >= 500 And ActiveSheet.Cells(i, 4).Value <= 1000) Then       
+            ActiveSheet.Cells(i, 4).Interior.Color = RGB(255, 151, 248)
+        ElseIf (ActiveSheet.Cells(i, 4).Value >= 1100 And ActiveSheet.Cells(i, 4).Value <= 4990) Then
+            ActiveSheet.Cells(i, 4).Interior.Color = RGB(255, 111, 248)
+        Else
+            ActiveSheet.Cells(i, 4).Interior.Color = RGB(255, 71, 248)
+        End If
+	Next i
+	
+	For i = theStart To theRange
+		If ActiveSheet.Cells(i, 6).Value = "Activities" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 34
+        ElseIf ActiveSheet.Cells(i, 6).Value = "Science Fair" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 35
+        ElseIf ActiveSheet.Cells(i, 6).Value = "Slideshow" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 36
+        ElseIf ActiveSheet.Cells(i, 6).Value = "Common Core" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 37
+        ElseIf ActiveSheet.Cells(i, 6).Value = "Worksheets" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 38
+        ElseIf ActiveSheet.Cells(i, 6).Value = "Games" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 39
+        ElseIf ActiveSheet.Cells(i, 6).Value = "Magazine Articles" Then
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 40
+		Else
+		End If
+	Next i
+End Sub
+
+Sub HighlightTopSpots() 'creates the second tab of the report, initializes an array of values (all set to 0), colors all of the cells in 'All Keywords', and tallies them up
+	ActiveWorkbook.Worksheets.Add After:=Workbooks(StringDateArray(0)).Worksheets("All Keywords")
+	ActiveSheet.Name = "Notable Movement"
+	ActiveWorkbook.Worksheets("gained").Range("A1:H32").Copy
+	ActiveWorkbook.Worksheets("Notable Movement").Cells(1, 1).Select
+	ActiveSheet.Paste
+	ActiveSheet.Cells(1, 10).Select
+	ActiveSheet.Paste
+	
+	For i = 0 To 24 Step 8
+		ActiveSheet.Range(Cells(2 + i, 2), Cells(8 + i, 8)).Value = 0
+		ActiveSheet.Range(Cells(2 + i, 11), Cells(8 + i, 17)).Value = 0
+	Next i
+	
+	Dim HeaderTableArray As Variant, HeaderTableArray2 As Variant
+	HeaderTableArray = Array("Gained/Entered Top 5", "Lost/Exited Top 5", "Improved/Entered Top 5", "Dropped/Exited Top 5")
+	HeaderTableArray2 = Array("Gained/Entered First Page", "Lost/Exited First Page", "Improved/Entered First Page", "Dropped/Exited First Page")
+	
+	For j = 0 To 3
+		ActiveSheet.Cells(1 + (j*8), 1).Value = HeaderTableArray(j)
+		ActiveSheet.Cells(1 + (j*8), 10).Value = HeaderTableArray2(j)
+	Next j
+	
+	Workbooks(StringDateArray(0)).Worksheets("All Keywords").Activate
+	Dim counter As Long
+	counter = 2
+	With ActiveSheet 'appropriately highlights all of the items in All Keywords.
+		Do While .Cells(counter, 1).Value > 0
+			Select Case .Cells(counter, 7).Value
+				Case "Improved"
+					If .Cells(counter, 3).Value > 5 And .Cells(counter, 2).Value <= 5 Then 'keyword enters the top 5
+						.Cells(counter, 1).Interior.ColorIndex = 4
+					ElseIf .Cells(counter, 3).Value > 10 And .Cells(counter, 2).Value <= 10 Then 'keyword appears on the first page
+						.Cells(counter, 1).Interior.ColorIndex = 35
+					Else
+					End If
+				Case "Gained"
+					If .Cells(counter, 2).Value <= 5 Then 'keyword enters the top 5
+						.Cells(counter, 1).Interior.ColorIndex = 4
+					ElseIf .Cells(counter, 2).Value > 5 And .Cells(counter, 2) <= 10 Then 'keyword appears on the first page
+						'THE ABOVE LOGIC WAS BROKEN. CHECK TO SEE IF THE NEW LOGIC WORKS.
+						.Cells(counter, 1).Interior.ColorIndex = 35
+					Else
+					End If
+				Case "Dropped"
+					If .Cells(counter, 3).Value <= 5 And .Cells(counter, 2).Value > 5 Then 'keyword dropped out of the top 5
+						.Cells(counter, 1).Interior.ColorIndex = 3
+					ElseIf 10 >= .Cells(counter, 3).Value And .Cells(counter, 2).Value > 10 Then 'keyword dropped off of the first page
+						.Cells(counter, 1).Interior.ColorIndex = 38
+					Else
+					End If
+				Case "Lost"
+					If .Cells(counter, 3).Value <= 5 Then 'lost keyword was previously in the top 5 results
+						.Cells(counter, 1).Interior.ColorIndex = 3
+					ElseIf 10 >= .Cells(counter, 3).Value Then 'lost keyword was previously in the top 10 results
+						.Cells(counter, 1).Interior.ColorIndex = 38
+					Else
+					End If
+				Case Else 
+			End Select
+			counter = counter + 1
+		Loop
+	End With
+	
+	For i = 2 To MasterRange3 'make sure this reference is correct. Does this 
+		Select Case Workbooks(StringDateArray(0)).Worksheets("All Keywords").Cells(i, 1).Interior.ColorIndex
+			Case 3, 4
+				Call RecalculateTableValues(3, 2, i, 0) 'gets called using color as the condition tested, since color indicates a specific type of movement
+			Case 35, 38
+				Call RecalculateTableValues(3, 2, i, 9) 'same thing happens here, but for entering/exiting the top 10
+			Case Else
+		End Select
+	Next i
+	
+	Call HighlightTopSpots2("Top 5")
+	Call HighlightTopSpots2("Top 10")
+	
+End Sub
+
+Sub HighlightTopSpots2(TableType) 
+	Workbooks(StringDateArray(0)).Worksheets("Notable Movement").Activate
+	Dim NotableMovementCounter As Integer, PositiveMovement As Boolean, Column1 As String, Column2 As String, Color1 As Integer, Color2 As Integer, Offset As Integer
+	NotableMovementCounter = 1
+	PositiveMovement = True
+	
+	If TableType = "Top 5" Then
+		Column1 = "A"
+		Column2 = "H"
+		Color1 = 4
+		Color2 = 3
+		Offset = 0
+	ElseIf TableType = "Top 10" Then
+		Column1 = "J"
+		Column2 = "Q"
+		Color1 = 35
+		Color2 = 38
+		Offset = 9
+	Else
+	End If
+    
+	For i = 0 To 24 Step 8
+        ActiveSheet.ListObjects.Add(xlSrcRange, Range(Column1 & CStr(1 + i) & ":" & Column2 & CStr(i + 8)), , xlYes).Name = "Notable Movement: " & TableType & " (" & CStr(NotableMovementCounter) & ")"
+		NotableMovementCounter = NotableMovementCounter + 1
+		For j = 3 To 5
+			For k = 2 To 8
+				If ActiveSheet.Cells(k + i, j + Offset).Value > 0 Then
+					If PositiveMovement = True Then
+						ActiveSheet.Cells(k + i, j + Offset).Interior.ColorIndex = Color1
+					Else
+						ActiveSheet.Cells(k + i, j + Offset).Interior.ColorIndex = Color2
+					End If
+				Else
+				End If
+			Next k
+		Next j
+		PositiveMovement = Not PositiveMovement
+    Next i
+End Sub
+
+Sub RecalculateTableValues(ActivatedSheet, TalliedSheet, j, WhatTable) 'gets called for every iteration of a loop when an entry is tallied in either the summary or notable movement tables
+	Workbooks(StringDateArray(0)).Worksheets(ActivatedSheet).Activate
+
+	Dim VolumeIndex As Integer, TypeIndex As Integer, TopicIndex As Integer, TableIndex As Integer
+	'Dim x As Integer, y As Integer, z As Integer
+	'the above variables are no longer being used
+	
+	With Workbooks(StringDateArray(0)).Worksheets(TalliedSheet)
+		If (.Cells(j, 7).Value <> "No Change") And (.Cells(j, 7) <> "Gained, then Lost") And (.Cells(j, 6) <> "Other") Then
+			Select Case .Cells(j, 7).Value
+				Case "Gained"
+					TypeIndex = 0
+				Case "Lost"
+					TypeIndex = 8
+				Case "Improved"
+					TypeIndex = 16
+				Case "Dropped"
+					TypeIndex = 24
+				Case Else
+			End Select
+			
+			Select Case .Cells(j, 4).Value
+				Case 5000 To 500000
+					VolumeIndex = 0
+				Case 1100 To 4900
+					VolumeIndex = 1
+				Case 500 To 1000
+					VolumeIndex = 2
+				Case 250 To 490
+					VolumeIndex = 3
+				Case 30 To 240
+					VolumeIndex = 4
+				Case 10 To 20
+					VolumeIndex = 5
+				Case Else
+			End Select
+			
+			Select Case .Cells(j, 6).Value
+				Case "Activities"
+					TopicIndex = 2
+				Case "Science Fair"
+					TopicIndex = 3
+				Case "Slideshow"
+					TopicIndex = 4
+				Case "Common Core"
+					TopicIndex = 5
+				Case "Worksheets"
+					TopicIndex = 6
+				Case "Games"
+					TopicIndex = 7
+				Case "Magazine Articles"
+					TopicIndex = 8
+				Case Else
+			End Select
+			
+			TableIndex = WhatTable 'variable used to offset where the table gets tallied for "notable movement"
+			With ActiveSheet
+				.Cells(TopicIndex + TypeIndex, 3 + VolumeIndex + TableIndex).Value = .Cells(TopicIndex + TypeIndex, 3 + VolumeIndex + TableIndex).Value + 1
+				.Cells(TopicIndex + TypeIndex, 2 + TableIndex).Value = .Cells(TopicIndex + TypeIndex, 2 + TableIndex).Value + 1
+			End With
+		Else
+		End If
+	End With
+End Sub
+
+Sub FormatEpochTime(theWorksheet, theRange, theStart) 'gets called to format a column full of epoch times to a regular date.
+	Workbooks(StringDateArray(0)).Worksheets(theWorksheet).Activate
+	Dim Epochs As Long
+	For i = theStart To theRange
+		Epochs = ActiveSheet.Cells(i, 8).Value
+		ActiveSheet.Cells(i, 8).Value = DateAdd("s", Epochs, "01/01/1970")
+	Next i
+End Sub
+
+Sub RemoveURLAddenda(theWorksheet, theRange, theStart) 'gets called to strip all of the URLs out of the keyword cells.
+	Dim splitCell() As String
+	Workbooks(StringDateArray(0)).Worksheets(theWorksheet).Activate
+	For i = theStart To theRange
+		With ActiveSheet
+			splitCell = Split(.Cells(i, 1).Value, "(")
+			.Cells(i, 1).Value = splitCell(0)
+		End With
+	Next i
+End Sub
+
+Sub MoveCannibalizationKeywords() 'moves the raw keyword data into a cannibalization tab.
+	ActiveWorkbook.Worksheets.Add After:=Workbooks(StringDateArray(0)).Worksheets("Notable Movement")
+	ActiveSheet.Name = "Possible Cannibalization"
+	Workbooks(StringDateArray(0)).Worksheets("gained").Activate
+	ActiveSheet.Cells(MasterRange, 1).Select
+	'MsgBox("Everything look good over here? If not, then what the fuck is the problem?")
+	ActiveSheet.Name = "Summary"
+	ActiveSheet.Range("A33:H" & CStr(MasterRange)).Cut
+	ActiveWorkbook.Worksheets("Possible Cannibalization").Activate
+	ActiveSheet.Cells(1, 1).Select
+	ActiveSheet.Paste
+	'add some logic that removes URLs and fixes colors
+End Sub
+
+Sub CloseSheets()
+	For i = 1 To (NumberOfComponentDates - 1)
+		Workbooks(StringDateArray(i)).Close savechanges:=False
+    Next i
+End Sub

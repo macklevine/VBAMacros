@@ -1,0 +1,430 @@
+Dim UserRange As Integer, SpreadsheetType As String, FolderName As String, TableType As String
+
+Sub OpenSpreadsheets()
+    Call ConfirmSpreadsheetType
+    FolderName = InputBox("What's the folder name? (Usually a date)")
+    Workbooks.Open ("S:\Editorial-new\Mack Levine\SEO\Exec Weekly Report\" & FolderName & "\lost.csv")
+    Call ConfirmSpreadsheetType
+    Workbooks.Open ("S:\Editorial-new\Mack Levine\SEO\Exec Weekly Report\" & FolderName & "\improved.csv")
+    Call ConfirmSpreadsheetType
+    Workbooks.Open ("S:\Editorial-new\Mack Levine\SEO\Exec Weekly Report\" & FolderName & "\dropped.csv")
+    Call ConfirmSpreadsheetType
+    Call ConsolidateKeywords
+    Call ConsolidateTables
+    Call DeleteDuplicates
+End Sub
+
+Sub ConfirmSpreadsheetType()
+    If ActiveSheet.Cells(1, 4).Value = "Search Volume" Then
+        SpreadsheetType = "GainedLost"
+    ElseIf ActiveSheet.Cells(1, 4).Value = "Position Difference" Then
+        SpreadsheetType = "ImprovedDeclined"
+    Else
+    End If
+    
+    If SpreadsheetType = "GainedLost" Then
+        Call MasterSubGainLost
+    ElseIf SpreadsheetType = "ImprovedDeclined" Then
+        Call MasterSubImprovedDropped
+    Else
+    End If
+End Sub
+
+'Begin master sub
+Sub MasterSubGainLost()
+    Call CleanupColumns("GainedLost")
+    Call CountTypes
+    Call CreateTable
+    Call CountVolumes
+    Call ShiftSummaryTable
+	Call HighlightGainedLost
+End Sub
+'End master sub
+
+Sub MasterSubImprovedDropped()
+    Call CleanupColumns("ImprovedDeclined")
+    Call CountTypes
+    Call CreateTable
+    Call CountVolumes
+    Call ShiftSummaryTable
+    Call HighlightGainedLost
+End Sub
+
+Sub ConfirmUserRange()
+    UserRange = 2
+    Do Until IsEmpty(ActiveSheet.Cells(UserRange, 1))
+        UserRange = UserRange + 1
+    Loop
+    UserRange = UserRange - 1
+    ActiveSheet.Cells(UserRange, 1).Select
+End Sub
+
+
+Sub CleanupColumns(SheetType)
+    
+    If SheetType = "GainedLost" Then
+        ActiveSheet.Columns("G:V").Delete 'Gets rid of columns with superfluous data
+        ActiveSheet.Columns("E").Copy 'These three lines shift and preserve the CPC Column to Column I, which subsequently becomes Column G
+        ActiveSheet.Columns("H").Select
+        ActiveSheet.Paste
+        ActiveSheet.Columns("E").Delete 'Gets rid of the CPC column
+        ActiveSheet.Columns("F").Copy
+        ActiveSheet.Columns("H").Select
+        ActiveSheet.Paste
+        ActiveSheet.Cells(1, 6).Value = "Content Type"
+        ActiveSheet.Columns("A:D").AutoFit
+        ActiveSheet.Cells(1, 8).Value = "Timestamp"
+    ElseIf SheetType = "ImprovedDeclined" Then
+        ActiveSheet.Columns("H:W").Delete 'Gets rid of columns with superfluous data
+        ActiveSheet.Columns("F").Copy 'These three lines shift and preserve the CPC column to Column I, which subsequently becomes Column G
+        ActiveSheet.Columns("I").Select
+        ActiveSheet.Paste
+        ActiveSheet.Columns("F").Delete 'Gets rid of the CPC column
+        ActiveSheet.Columns("D").Delete 'Gets rid of the previous position column
+        ActiveSheet.Columns("F").Copy
+        ActiveSheet.Columns("H").Select
+        ActiveSheet.Paste
+        ActiveSheet.Cells(1, 6).Value = "Content Type"
+        ActiveSheet.Columns("A:D").AutoFit
+		ActiveSheet.Cells(1, 8).Value = "Timestamp"
+    Else
+    End If
+    
+    UserRange = 2
+    Do Until IsEmpty(ActiveSheet.Cells(UserRange, 1))
+        UserRange = UserRange + 1
+    Loop
+    UserRange = UserRange - 1
+        
+    For i = 2 To UserRange
+        If InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/activity/") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Activities"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 34
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/science-fair/") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Science Fair"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 35
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/slideshow/") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Slideshow"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 36
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/common-core/") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Common Core"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 37
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/worksheet") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Worksheets"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 38
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/games") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Games"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 39
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/magazine") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "Magazine Articles"
+            ActiveSheet.Cells(i, 6).Interior.ColorIndex = 40
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/schoolfinder/") > 0 Then
+            ActiveSheet.Cells(i, 6).Value = "School Finder"
+        Else
+            ActiveSheet.Cells(i, 6).Value = "Other"
+        End If
+    Next i
+
+End Sub
+
+Sub CountTypes()
+    Dim i As Integer
+    Dim Activities As Integer: Activities = 0
+    Dim ScienceFair As Integer: ScienceFair = 0
+    Dim Slideshow As Integer: Slideshow = 0
+    Dim CommonCore As Integer: CommonCore = 0
+    Dim Worksheets As Integer: Worksheets = 0
+    Dim Games As Integer: Games = 0
+    Dim Magazine As Integer: Magazine = 0
+    For i = 2 To UserRange
+        If InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/activity/") > 0 Then
+            Activities = Activities + 1
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/science-fair/") > 0 Then
+            ScienceFair = ScienceFair + 1
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/slideshow/") > 0 Then
+            Slideshow = Slideshow + 1
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/common-core/") > 0 Then
+            CommonCore = CommonCore + 1
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/worksheet") > 0 Then
+            Worksheets = Worksheets + 1
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/games") > 0 Then
+            Games = Games + 1
+        ElseIf InStr(1, ActiveSheet.Cells(i, 5).Value, "http://www.education.com/magazine") > 0 Then
+            Magazine = Magazine + 1
+        End If
+    Next i
+
+    'Give the headers names
+    Dim SummaryTableHeaderArray As Variant
+    SummaryTableHeaderArray = Array("Activities", "ScienceFair", "Slideshow", "CommonCore", "Worksheets", "Games", "Magazine")
+    For i = 2 To 8
+        ActiveSheet.Cells(i, 9).Value = SummaryTableHeaderArray(i - 2)
+        ActiveSheet.Cells(i, 9).Interior.ColorIndex = 32 + i
+    Next i
+    ActiveSheet.Columns("I").AutoFit
+    
+    Dim AllContentTypeCounts As Variant
+    AllContentTypeCounts = Array(Activities, ScienceFair, Slideshow, CommonCore, Worksheets, Games, Magazine)
+    For i = 0 To 6
+        ActiveSheet.Cells((2 + i), 10).Value = AllContentTypeCounts(i)
+    'Also: Establishes values for the rest of the table
+    Next i
+    
+    Dim SummaryTableHeaderArray2 As Variant
+    If ActiveSheet.Cells(2, 2).Value = 0 Then
+        TableType = "Keyword Type (Lost)"
+        For i = 2 To UserRange
+            ActiveSheet.Cells(i, 7).Value = "Lost"
+        Next i
+    ElseIf ActiveSheet.Cells(2, 3).Value = 0 Then
+        TableType = "Keyword Type (Gained)"
+        For i = 2 To UserRange
+            ActiveSheet.Cells(i, 7).Value = "Gained"
+        Next i
+    ElseIf ActiveSheet.Cells(2, 2).Value > ActiveSheet.Cells(2, 3).Value Then
+        TableType = "Keyword Type (Dropped)"
+        For i = 2 To UserRange
+            ActiveSheet.Cells(i, 7).Value = "Dropped"
+        Next i
+    ElseIf ActiveSheet.Cells(2, 2).Value < ActiveSheet.Cells(2, 3).Value Then
+        TableType = "Keyword Type (Improved)"
+        For i = 2 To UserRange
+            ActiveSheet.Cells(i, 7).Value = "Improved"
+        Next i
+    Else
+    End If
+    SummaryTableHeaderArray2 = Array(TableType, "Totals", "5000+", "1100-4900", "500-1000", "10-490")
+    For i = 0 To 5
+    ActiveSheet.Cells(1, (9 + i)).Value = SummaryTableHeaderArray2(i)
+    Next i
+    
+End Sub
+
+Sub CreateTable()
+    ActiveSheet.ListObjects.Add(xlSrcRange, Range("A1:H" & UserRange), , xlYes).Name = "Main Table"
+End Sub
+
+Sub VolumeRanges(ChartLocation, Red, Green, Blue, j)
+                If (ActiveSheet.Cells(j, 4).Value > 0 And ActiveSheet.Cells(j, 4).Value <= 490) Then
+                    ActiveSheet.Cells(ChartLocation, 14).Value = ActiveSheet.Cells(ChartLocation, 14).Value + 1
+                    ActiveSheet.Cells(j, 4).Interior.Color = RGB(Red, Green, Blue)
+                ElseIf (ActiveSheet.Cells(j, 4).Value >= 500 And ActiveSheet.Cells(j, 4).Value <= 1000) Then
+                    ActiveSheet.Cells(ChartLocation, 13).Value = ActiveSheet.Cells(ChartLocation, 13).Value + 1
+                    ActiveSheet.Cells(j, 4).Interior.Color = RGB(Red, Green - 40, Blue)
+                ElseIf (ActiveSheet.Cells(j, 4).Value >= 1100 And ActiveSheet.Cells(j, 4).Value <= 4990) Then
+                    ActiveSheet.Cells(ChartLocation, 12).Value = ActiveSheet.Cells(ChartLocation, 12).Value + 1
+                    ActiveSheet.Cells(j, 4).Interior.Color = RGB(Red, Green - 80, Blue)
+                Else
+                    ActiveSheet.Cells(ChartLocation, 11).Value = ActiveSheet.Cells(ChartLocation, 11).Value + 1
+                    ActiveSheet.Cells(j, 4).Interior.Color = RGB(Red, Green - 120, Blue)
+                End If
+
+End Sub
+
+Sub CountVolumes()
+'It wouldn't hurt to eventually give each content type a different color scale based on keyword volume; I will have to
+'alter the function to accept 4 hex values as parameters rather than RGB values.
+'Part of the scaffolding is already here.
+Dim i As Integer
+    For i = 2 To UserRange
+        Select Case ActiveSheet.Cells(i, 6).Value
+            Case "Activities"
+                Call VolumeRanges(2, 255, 191, 248, i)
+            Case "Science Fair"
+                Call VolumeRanges(3, 255, 191, 248, i)
+            Case "Slideshow"
+                Call VolumeRanges(4, 255, 191, 248, i)
+            Case "Common Core"
+                Call VolumeRanges(5, 255, 191, 248, i)
+            Case "Worksheets"
+                Call VolumeRanges(6, 255, 191, 248, i)
+            Case "Games"
+                Call VolumeRanges(7, 255, 191, 248, i)
+            Case "Magazine Articles"
+                Call VolumeRanges(8, 255, 191, 248, i)
+            Case Else 'Volume ranges for "other"
+                        'I may want to add something in to account for other types of content (questions, etc.)
+        End Select
+    Next i
+End Sub
+
+Sub ShiftSummaryTable()
+    Dim i As Integer
+    For i = 1 To 8
+    ActiveSheet.Cells(1, 1).Select
+    ActiveCell.EntireRow.Insert
+    Next i
+    ActiveSheet.Range("I9:N16").Cut
+    ActiveSheet.Range("A1").Select
+    ActiveSheet.Paste
+    ActiveSheet.ListObjects.Add(xlSrcRange, Range("A1:F8"), , xlYes).Name = "Summary Table"
+End Sub
+
+Sub HighlightGainedLost()
+        For i = 10 To (UserRange + 10)
+            If ActiveSheet.Cells(i, 2).Value = 0 Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(175, 90, 90)
+            ElseIf ActiveSheet.Cells(i, 3).Value = 0 Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(90, 190, 90)
+            ElseIf ActiveSheet.Cells(i, 2).Value < ActiveSheet.Cells(i, 3).Value Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(90, 190, 90)
+            ElseIf ActiveSheet.Cells(i, 2).Value > ActiveSheet.Cells(i, 3).Value Then
+                ActiveSheet.Cells(i, 2).Font.Color = RGB(175, 90, 90)
+            Else
+            End If
+        Next i
+        ActiveSheet.Range("B10:B" & (UserRange + 8)).Font.Bold = True
+        ActiveSheet.Range("B10:B" & (UserRange + 8)).Font.Size = 12
+End Sub
+
+'can be rewritten to be a function that is called; the specific counter variable can be passed to the function as a paremeter.
+Sub ConsolidateKeywords()
+    Dim GainedRange As Integer, LostRange As Integer, ImprovedRange As Integer, DroppedRange As Integer
+   
+    Workbooks("gained.csv").Activate
+    GainedRange = 0
+    Do Until IsEmpty(ActiveSheet.Cells(GainedRange + 1, 1))
+        GainedRange = GainedRange + 1
+    Loop
+    
+    Workbooks("lost.csv").Activate
+    LostRange = 0
+    Do Until IsEmpty(ActiveSheet.Cells(LostRange + 1, 1))
+        LostRange = LostRange + 1
+    Loop
+    ActiveSheet.Range(Cells(10, 1), Cells(LostRange, 8)).Copy
+    Workbooks("gained.csv").Activate
+    ActiveSheet.Cells((GainedRange + 1), 1).Select
+    ActiveSheet.Paste
+    GainedRange = GainedRange + (LostRange - 9)
+    
+    Workbooks("improved.csv").Activate
+    ImprovedRange = 0
+    Do Until IsEmpty(ActiveSheet.Cells(ImprovedRange + 1, 1))
+        ImprovedRange = ImprovedRange + 1
+    Loop
+    ActiveSheet.Range(Cells(10, 1), Cells(ImprovedRange, 8)).Copy
+    Workbooks("gained.csv").Activate
+    ActiveSheet.Cells((GainedRange + 1), 1).Select
+    ActiveSheet.Paste
+    GainedRange = GainedRange + (ImprovedRange - 9)
+    
+    Workbooks("dropped.csv").Activate
+    DroppedRange = 0
+    Do Until IsEmpty(ActiveSheet.Cells(DroppedRange + 1, 1))
+        DroppedRange = DroppedRange + 1
+    Loop
+    ActiveSheet.Range(Cells(10, 1), Cells(DroppedRange, 8)).Copy
+    Workbooks("gained.csv").Activate
+    ActiveSheet.Cells((GainedRange + 1), 1).Select
+    ActiveSheet.Paste
+    GainedRange = GainedRange + (DroppedRange - 9)
+    
+End Sub
+
+Sub ConsolidateTables()
+'could be rewritten as a function that accepts parameters; gets called called...
+    Workbooks("gained.csv").Activate
+    For i = 1 To 24
+    ActiveSheet.Cells(9, 1).Select
+    ActiveCell.EntireRow.Insert
+    Next i
+'The above portion would only run once
+    Workbooks("lost.csv").Activate
+    ActiveSheet.Range("A1:F8").Copy
+    Workbooks("gained.csv").Activate
+    ActiveSheet.Cells(9, 1).Select
+    ActiveSheet.Paste
+    
+    Workbooks("improved.csv").Activate
+    ActiveSheet.Range("A1:F8").Copy
+    Workbooks("gained.csv").Activate
+    ActiveSheet.Cells(17, 1).Select
+    ActiveSheet.Paste
+    
+    Workbooks("dropped.csv").Activate
+    ActiveSheet.Range("A1:F8").Copy
+    Workbooks("gained.csv").Activate
+    ActiveSheet.Cells(25, 1).Select
+    ActiveSheet.Paste
+    
+    Workbooks("gained.csv").Activate
+End Sub
+
+Sub DeleteDuplicates()
+	With ActiveSheet
+		Dim urlCounter As Integer
+		urlCounter = 34
+		Do Until IsEmpty(.Cells(urlCounter, 1))
+			.Cells(urlCounter, 1).Value = .Cells(urlCounter, 1).Value & "(" & .Cells(urlCounter, 5).Value & ")"
+			urlCounter = urlCounter + 1
+		Loop
+	End With
+    Set filterTable = ActiveWorkbook.Worksheets(1).ListObjects("Main Table")
+    With filterTable
+        .Sort.SortFields.Clear
+        .Sort.SortFields.Add Key:=Range("A33"), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+        With .Sort
+            .Header = xlYes
+            .MatchCase = False
+            .Orientation = xlTopToBottom
+            .SortMethod = xlPinYin
+            .Apply
+        End With
+    End With
+    Dim dupCounter As Integer, nextCell As Integer
+    dupCounter = 34
+	nextCell = 35
+    Do Until IsEmpty(ActiveSheet.Cells(dupCounter, 1))
+	
+    With ActiveSheet
+		If .Cells(dupCounter, 1).Value = .Cells((nextCell), 1).Value Then
+			Do While .Cells(dupCounter, 1).Value = .Cells(nextCell, 1).Value
+				If .Cells(dupCounter, 8).Value > .Cells(nextCell, 8).Value Then
+					.Cells(dupCounter, 3).Value = .Cells(nextCell, 3).Value
+					'revise the value of the previous position column
+					.Cells(nextCell, 3).EntireRow.Delete
+					Call RecalculateMovement(dupCounter)
+				ElseIf .Cells(dupCounter, 8).Value < .Cells(nextCell, 8).Value Then
+					.Cells(nextCell, 3).Value = .Cells(dupCounter, 3).Value
+					'revise the value of the previous position column
+					.Cells(dupCounter, 1).EntireRow.Delete
+					Call RecalculateMovement(nextCell)
+				Else
+					MsgBox("Something went wrong. Investigate.")
+					dupCounter = dupCounter + 1
+					nextCell = nextCell + 1
+					'skip over the cell...
+				End If
+			Loop
+		Else
+			dupCounter = dupCounter + 1
+			nextCell = dupCounter + 1
+		End If
+	End With
+    Loop
+	ActiveWorkbook.SaveAs "S:\Editorial-new\Mack Levine\SEO\Exec Weekly Report\" & FolderName & "\" & FolderName & ".xlsm", FileFormat:=52
+	Workbooks("lost.csv").Close savechanges:=False
+	Workbooks("dropped.csv").Close savechanges:=False
+	Workbooks("improved.csv").Close savechanges:=False
+End Sub
+
+Sub RecalculateMovement(CellIndex)
+	Dim intPosition As Integer, intPreviousPosition As Integer
+	intPosition = ActiveSheet.Cells(CellIndex, 2).Value
+	intPreviousPosition = ActiveSheet.Cells(CellIndex, 3).Value
+	If intPosition = 0 And intPreviousPosition = 0 Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Gained, then Lost"
+	ElseIf intPosition > 0 And intPreviousPosition = 0 Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Gained"
+	ElseIf intPosition = 0 And intPreviousPosition > 0 Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Lost"
+	ElseIf intPosition > intPreviousPosition Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Dropped"
+	ElseIf intPosition < intPreviousPosition Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "Improved"
+	ElseIf intPosition = intPreviousPosition Then
+		ActiveSheet.Cells(CellIndex, 7).Value = "No Change"
+	Else
+	End If
+End Sub
