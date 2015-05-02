@@ -1,6 +1,6 @@
 Dim StartingDate As String, DateArray(0 To 6) As Date, StringDateArray(0 To 6) As String, MasterRange As Long, MasterRange2 As Long, MasterRange3 As Long
 Dim NumberOfComponentDates As Integer
-
+'Author: Mack Levine
 'BUG: entries in "All Keywords" don't get properly tabled
 
 Sub MasterSub()

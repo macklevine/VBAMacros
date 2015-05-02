@@ -1,5 +1,5 @@
 Dim UserRange As Integer, SpreadsheetType As String, FolderName As String, TableType As String
-
+'Author: Mack Levine
 Sub OpenSpreadsheets()
     Call ConfirmSpreadsheetType
     FolderName = InputBox("What's the folder name? (Usually a date)")

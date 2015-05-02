@@ -1,6 +1,6 @@
 Dim SheetType As String, TheWorkbook As String, TheWorkbookRange As Long
 Dim TheMovementRangeConstant As Long, ColumnIndex As Integer, VerticalCounter As Long, LookUpCompare As Long, VerticalCounter2 As Long
-
+'Author: Mack Levine
 Sub MasterSub()
 	'TheWorkbook = Replace(ActiveWorkbook.Name, ".xlsm", "")
 	TheWorkbook = ActiveWorkbook.Name
